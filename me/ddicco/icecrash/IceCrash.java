@@ -2,7 +2,6 @@ package me.ddicco.icecrash;
 
 import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Random;
 import java.util.Set;
 
@@ -11,9 +10,7 @@ import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.FallingBlock;
-import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
-import org.bukkit.metadata.FixedMetadataValue;
 import org.bukkit.util.Vector;
 
 import com.projectkorra.projectkorra.GeneralMethods;
@@ -21,7 +18,6 @@ import com.projectkorra.projectkorra.ProjectKorra;
 import com.projectkorra.projectkorra.ability.AddonAbility;
 import com.projectkorra.projectkorra.ability.WaterAbility;
 import com.projectkorra.projectkorra.util.DamageHandler;
-import com.projectkorra.projectkorra.util.ParticleEffect;
 import com.projectkorra.projectkorra.util.TempBlock;
 
 public class IceCrash extends WaterAbility implements AddonAbility{
@@ -35,7 +31,6 @@ public class IceCrash extends WaterAbility implements AddonAbility{
 	private Vector direction;
 	private Location location;
 	private Location startlocation;
-	private TempBlock tblock;
 	private ArrayList<TempBlock> previoustempblocks = new ArrayList<TempBlock>();
 	private ArrayList<TempBlock> tempblocks = new ArrayList<TempBlock>();
 	private Block blocklocation;
@@ -62,7 +57,7 @@ public class IceCrash extends WaterAbility implements AddonAbility{
 
 	private void setFields() {
 		// TODO Auto-generated method stub
-		numberofshards = 20;
+		speed = 1;
 		damage = 4;
 		sharddamage = 1;
 		shardinterval = 500;
@@ -117,31 +112,39 @@ public class IceCrash extends WaterAbility implements AddonAbility{
 	private void setBlocks() {
 		for(int y = 0; y < 2; y += 1) {
 			blocklocation = location.clone().add(0, y, 0).getBlock();
-			TempBlock tblock = new TempBlock(blocklocation, Material.ICE, (byte) 0);
-			tempblocks.add(tblock);
+			if(blocklocation.getType() == Material.AIR || blocklocation.getType() == Material.ICE) {
+				TempBlock tblock = new TempBlock(blocklocation, Material.ICE, (byte) 0);
+				tempblocks.add(tblock);
+			}
 		}
 		
 		for(int x = -1; x < 2; x += 2) {
 			for(int y = -1; y < 2; y += 1) {
 				blocklocation = location.clone().add(x, y, 0).getBlock();
-				TempBlock tblock = new TempBlock(blocklocation, Material.ICE, (byte) 0);
-				tempblocks.add(tblock);
+				if(blocklocation.getType() == Material.AIR || blocklocation.getType() == Material.ICE) {
+					TempBlock tblock = new TempBlock(blocklocation, Material.ICE, (byte) 0);
+					tempblocks.add(tblock);
+				}
 			}
 		}
 		
 		for(int z = -1; z < 2; z += 2) {
 			for(int y = -1; y < 2; y += 1) {
 				blocklocation = location.clone().add(0, y, z).getBlock();
-				TempBlock tblock = new TempBlock(blocklocation, Material.ICE, (byte) 0);
-				tempblocks.add(tblock);
+				if(blocklocation.getType() == Material.AIR || blocklocation.getType() == Material.ICE) {
+					TempBlock tblock = new TempBlock(blocklocation, Material.ICE, (byte) 0);
+					tempblocks.add(tblock);
+				}
 			}
 		}
 		
 		for(int x = -1; x < 2; x += 2) {
 			for(int z = -1; z < 2; z += 2) {
 				blocklocation = location.clone().add(x, 0, z).getBlock();
-				TempBlock tblock = new TempBlock(blocklocation, Material.ICE, (byte) 0);
-				tempblocks.add(tblock);
+				if(blocklocation.getType() == Material.AIR || blocklocation.getType() == Material.ICE) {
+					TempBlock tblock = new TempBlock(blocklocation, Material.ICE, (byte) 0);
+					tempblocks.add(tblock);
+				}
 			}
 		}
 	}
@@ -151,6 +154,8 @@ public class IceCrash extends WaterAbility implements AddonAbility{
 		// TODO Auto-generated method stub
 		
 		if(!bPlayer.canBend(this) || player.isDead() || !player.isOnline()) {
+			bPlayer.addCooldown(this);
+			player.sendMessage("you cant bend this");
 			remove();
 			return;
 		}
@@ -166,41 +171,24 @@ public class IceCrash extends WaterAbility implements AddonAbility{
 		location.add(direction).multiply(speed);
 		for(Entity e : GeneralMethods.getEntitiesAroundPoint(location, radius)) {
 			if(e != null) {
+				player.sendMessage("damage");
 				DamageHandler.damageEntity(e, damage, this);
 				bPlayer.addCooldown(this);
-				createShards();
 				remove();
 				return;
 			}
 		}
 		
-		if(location.clone().add(direction).getBlock().getType() != Material.AIR) {
-			if(location.clone().add(direction).getBlock().getType() != Material.ICE) {
+		Location testblocklocation = location;
+		final Block block = testblocklocation.getBlock();
+		
+		if (!block.getType().equals(Material.AIR)) {
+			if (!block.getType().equals(Material.ICE)) {
+				player.sendMessage("" + block.getType() + " " + block.getLocation());
 				bPlayer.addCooldown(this);
-				createShards();
+				remove();
+				return;
 			}
-		}
-		
-		if(location.distance(startlocation) > range) {
-			bPlayer.addCooldown(this);
-			remove();
-			return;
-		}
-	}
-	
-	public void createShards() {
-		
-		for(int i = 0; i < numberofshards + 1; i += 1) {
-			FallingBlock fb = GeneralMethods.spawnFallingBlock(location.add(0, 0.5, 0), Material.ICE);
-			double x = random.nextDouble();
-			double z = random.nextDouble();
-			Vector v = new Vector(x, 0, z);
-			fb.setVelocity(v);
-			fb.setMetadata("icecrashshards", new FixedMetadataValue(ProjectKorra.plugin, this));
-			fb.setHurtEntities(false);
-			fb.setDropItem(false);
-			
-			tracker.add(fb);
 		}
 	}
 
