@@ -9,20 +9,25 @@ import org.bukkit.entity.Player;
 
 import com.projectkorra.projectkorra.ability.AddonAbility;
 import com.projectkorra.projectkorra.ability.WaterAbility;
+import com.projectkorra.projectkorra.configuration.ConfigManager;
+import com.projectkorra.projectkorra.util.BlockSource;
 import com.projectkorra.projectkorra.util.TempBlock;
+import com.projectkorra.projectkorra.waterbending.util.WaterReturn;
 
 public class IceCrashPrepare extends WaterAbility implements AddonAbility {
 
 	private long cooldown;
-	public static Location blocklocation;
+	public Location blocklocation;
 	private Location location;
-	private static ArrayList<TempBlock> tempblocks = new ArrayList<TempBlock>();
-	private static Block block;
+	private ArrayList<TempBlock> tempblocks = new ArrayList<TempBlock>();
+	private Block block;
 	private Block newblocklocation;
 	private long duration;
 	private long starttime;
 	private boolean setup = false;
 	private int loopcounter = 0;
+	private double sourcerange;
+	private Block sourceblock;
 
 	public IceCrashPrepare(Player player) {
 		super(player);
@@ -32,22 +37,34 @@ public class IceCrashPrepare extends WaterAbility implements AddonAbility {
 			remove();
 			return;
 		}
-		
 		setFields();
-		
-		start();
+		if(WaterReturn.hasWaterBottle(player)) {
+			WaterReturn.emptyWaterBottle(player);
+			start();
+		} else if(sourceblock != null) {
+			
+			block = sourceblock.getLocation().add(0, 2, 0).getBlock();
+			location = block.getLocation().add(0, -2, 0);
+			start();
+		} else {
+			remove();
+			return;
+		}
 	}
 	
-	public static ArrayList<TempBlock> getTempBlocks() {
-		return tempblocks;
+	public String getConfigPath() {
+		return "ExtraAbilities.ddicco.Water.IceCrash.";
 	}
 	
 	private void setFields() {
 		// TODO Auto-generated method stub
+		sourcerange = 32;
+		sourceblock = BlockSource.getWaterSourceBlock(player, sourcerange);
 		block = player.getLocation().add(0, 2, 0).getBlock();
 		location = player.getLocation();
-		cooldown = 1000;
-		duration = 15000;
+		
+		cooldown = ConfigManager.getConfig().getLong(getConfigPath() + "Passive.Cooldown");
+		duration = ConfigManager.getConfig().getLong(getConfigPath() + "Passive.Duration");
 		starttime = System.currentTimeMillis();
 	}
 
@@ -86,6 +103,7 @@ public class IceCrashPrepare extends WaterAbility implements AddonAbility {
 		// TODO Auto-generated method stub
 		
 		if(!bPlayer.canBend(this)) {
+			new WaterReturn(player, player.getLocation().getBlock());
 			bPlayer.addCooldown(this);
 			remove();
 			return;
@@ -98,12 +116,12 @@ public class IceCrashPrepare extends WaterAbility implements AddonAbility {
 		}
 		
 		if(loopcounter == 0) {
-			TempBlock watertblock = new TempBlock(block, Material.STATIONARY_WATER, (byte) 0);
+			TempBlock watertblock = new TempBlock(block, Material.WATER);
 			tempblocks.add(watertblock);
 		}
 		
 		if(loopcounter == 1) {
-			TempBlock watertblock2 = new TempBlock(block.getLocation().add(0, 1, 0).getBlock(), Material.STATIONARY_WATER, (byte) 0);
+			TempBlock watertblock2 = new TempBlock(block.getLocation().add(0, 1, 0).getBlock(), Material.WATER);
 			tempblocks.add(watertblock2);
 		}
 		
@@ -111,14 +129,14 @@ public class IceCrashPrepare extends WaterAbility implements AddonAbility {
 			if(setup == false) {
 				for(int y = 4; y < 6; y += 1) {
 					newblocklocation = location.clone().add(0, y, 0).getBlock();
-					TempBlock tblock = new TempBlock(newblocklocation, Material.ICE, (byte) 0);
+					TempBlock tblock = new TempBlock(newblocklocation, Material.ICE);
 					tempblocks.add(tblock);
 				}
 				
 				for(int x = -1; x < 2; x += 2) {
 					for(int y = 3; y < 6; y += 1) {
 						newblocklocation = location.clone().add(x, y, 0).getBlock();
-						TempBlock tblock = new TempBlock(newblocklocation, Material.ICE, (byte) 0);
+						TempBlock tblock = new TempBlock(newblocklocation, Material.ICE);
 						tempblocks.add(tblock);
 					}
 				}
@@ -126,7 +144,7 @@ public class IceCrashPrepare extends WaterAbility implements AddonAbility {
 				for(int z = -1; z < 2; z += 2) {
 					for(int y = 3; y < 6; y += 1) {
 						newblocklocation = location.clone().add(0, y, z).getBlock();
-						TempBlock tblock = new TempBlock(newblocklocation, Material.ICE, (byte) 0);
+						TempBlock tblock = new TempBlock(newblocklocation, Material.ICE);
 						tempblocks.add(tblock);
 					}
 				}
@@ -134,7 +152,7 @@ public class IceCrashPrepare extends WaterAbility implements AddonAbility {
 				for(int x = -1; x < 2; x += 2) {
 					for(int z = -1; z < 2; z += 2) {
 						newblocklocation = location.clone().add(x, 4, z).getBlock();
-						TempBlock tblock = new TempBlock(newblocklocation, Material.ICE, (byte) 0);
+						TempBlock tblock = new TempBlock(newblocklocation, Material.ICE);
 						tempblocks.add(tblock);
 					}
 				}
@@ -145,6 +163,7 @@ public class IceCrashPrepare extends WaterAbility implements AddonAbility {
 		
 		if(starttime + duration < System.currentTimeMillis()) {
 			bPlayer.addCooldown(this);
+			new WaterReturn(player, player.getLocation().getBlock());
 			remove();
 			return;
 		}
@@ -172,7 +191,7 @@ public class IceCrashPrepare extends WaterAbility implements AddonAbility {
 	@Override
 	public String getVersion() {
 		// TODO Auto-generated method stub
-		return "2.0";
+		return "idk either";
 	}
 
 	@Override
@@ -186,8 +205,11 @@ public class IceCrashPrepare extends WaterAbility implements AddonAbility {
 		
 	}
 
-	public static Location getCrashLocation() {
-		return blocklocation = block.getLocation();
+	public void createMoveAnimation() {
+		// TODO Auto-generated method stub
+		if(tempblocks != null && block != null) {
+			new IceCrash(player, block.getLocation(), tempblocks);
+		}
 	}
 
 }
