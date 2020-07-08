@@ -1,8 +1,10 @@
 package me.ddicco.icecrash;
 
+import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.entity.EntityChangeBlockEvent;
 import org.bukkit.event.player.PlayerAnimationEvent;
 import org.bukkit.event.player.PlayerToggleSneakEvent;
 
@@ -16,8 +18,7 @@ public class IceCrashListener implements Listener {
 	public void onClick(PlayerToggleSneakEvent e) {
 		Player player = e.getPlayer();
 		BendingPlayer bPlayer = BendingPlayer.getBendingPlayer(player);
-		
-		if (e.isCancelled() || bPlayer == null) {
+		if (e.isCancelled() || bPlayer == null || !player.isSneaking()) {
 			return;
 		} else if (bPlayer.canBend(CoreAbility.getAbility(IceCrashPrepare.class)) && !CoreAbility.hasAbility(player, IceCrashPrepare.class) && !CoreAbility.hasAbility(player, IceCrash.class)) {
 			new IceCrashPrepare(player);
@@ -37,9 +38,16 @@ public class IceCrashListener implements Listener {
 				if(CoreAbility.hasAbility(event.getPlayer(), IceCrash.class)) {
 					((IceCrash) CoreAbility.getAbility(player, IceCrash.class)).leftClickFunction();
 				} else {
-					new IceCrash(player);
+					((IceCrashPrepare) CoreAbility.getAbility(player, IceCrashPrepare.class)).createMoveAnimation();
 				}
 			}
 		}
 	}
+	
+	@EventHandler
+    public void onEntityChangeBlockEvent(EntityChangeBlockEvent e) {
+        if(e.getEntityType().equals(EntityType.FALLING_BLOCK) && e.getEntity().hasMetadata("icecrashshards")) {
+            e.setCancelled(true);
+        }
+    }
 }
