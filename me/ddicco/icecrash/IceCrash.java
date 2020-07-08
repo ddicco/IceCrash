@@ -1,15 +1,11 @@
 package me.ddicco.icecrash;
 
 import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.Random;
-import java.util.Set;
 
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Entity;
-import org.bukkit.entity.FallingBlock;
 import org.bukkit.entity.Player;
 import org.bukkit.util.Vector;
 
@@ -17,35 +13,30 @@ import com.projectkorra.projectkorra.GeneralMethods;
 import com.projectkorra.projectkorra.ProjectKorra;
 import com.projectkorra.projectkorra.ability.AddonAbility;
 import com.projectkorra.projectkorra.ability.WaterAbility;
+import com.projectkorra.projectkorra.configuration.ConfigManager;
 import com.projectkorra.projectkorra.util.DamageHandler;
 import com.projectkorra.projectkorra.util.TempBlock;
+import com.projectkorra.projectkorra.waterbending.util.WaterReturn;
 
 public class IceCrash extends WaterAbility implements AddonAbility{
 	
-	private int numberofshards;
-	private Random random = new Random();
 	private double damage;
-	private double sharddamage;
-	private double shardinterval;
 	private long cooldown;
 	private Vector direction;
 	private Location location;
-	private Location startlocation;
 	private ArrayList<TempBlock> previoustempblocks = new ArrayList<TempBlock>();
 	private ArrayList<TempBlock> tempblocks = new ArrayList<TempBlock>();
 	private Block blocklocation;
 	private double speed;
 	private double radius;
-	private double range;
-	private Set<FallingBlock> tracker;
 
-	public IceCrash(Player player) {
+	public IceCrash(Player player, Location loc, ArrayList<TempBlock> tempBlocks) {
 		super(player);
 		// TODO Auto-generated constructor stub
-		
+		location = loc;
 		setFields();
 		
-		previoustempblocks = IceCrashPrepare.getTempBlocks();
+		previoustempblocks = tempBlocks;
 		
 		for(TempBlock tb : previoustempblocks) {
 	        tb.revertBlock();
@@ -57,17 +48,13 @@ public class IceCrash extends WaterAbility implements AddonAbility{
 
 	private void setFields() {
 		// TODO Auto-generated method stub
-		speed = 1;
-		damage = 4;
-		sharddamage = 1;
-		shardinterval = 500;
-		cooldown = 10000;
-		startlocation = IceCrashPrepare.getCrashLocation();
-		location = IceCrashPrepare.getCrashLocation();
+		speed = ConfigManager.getConfig().getDouble(getConfigPath() + "Smash.Speed");
+		damage = ConfigManager.getConfig().getDouble(getConfigPath() + "Smash.Damage");
+		cooldown = ConfigManager.getConfig().getLong(getConfigPath() + "Smash.Cooldown");
 		location.add(0, 2, 0);
 		direction = player.getEyeLocation().getDirection();
+		radius = ConfigManager.getConfig().getDouble(getConfigPath() + "Smash.Radius");
 		
-		tracker = new HashSet<FallingBlock>();
 	}
 	
 	@Override
@@ -113,7 +100,7 @@ public class IceCrash extends WaterAbility implements AddonAbility{
 		for(int y = 0; y < 2; y += 1) {
 			blocklocation = location.clone().add(0, y, 0).getBlock();
 			if(blocklocation.getType() == Material.AIR || blocklocation.getType() == Material.ICE) {
-				TempBlock tblock = new TempBlock(blocklocation, Material.ICE, (byte) 0);
+				TempBlock tblock = new TempBlock(blocklocation, Material.ICE);
 				tempblocks.add(tblock);
 			}
 		}
@@ -122,7 +109,7 @@ public class IceCrash extends WaterAbility implements AddonAbility{
 			for(int y = -1; y < 2; y += 1) {
 				blocklocation = location.clone().add(x, y, 0).getBlock();
 				if(blocklocation.getType() == Material.AIR || blocklocation.getType() == Material.ICE) {
-					TempBlock tblock = new TempBlock(blocklocation, Material.ICE, (byte) 0);
+					TempBlock tblock = new TempBlock(blocklocation, Material.ICE);
 					tempblocks.add(tblock);
 				}
 			}
@@ -132,7 +119,7 @@ public class IceCrash extends WaterAbility implements AddonAbility{
 			for(int y = -1; y < 2; y += 1) {
 				blocklocation = location.clone().add(0, y, z).getBlock();
 				if(blocklocation.getType() == Material.AIR || blocklocation.getType() == Material.ICE) {
-					TempBlock tblock = new TempBlock(blocklocation, Material.ICE, (byte) 0);
+					TempBlock tblock = new TempBlock(blocklocation, Material.ICE);
 					tempblocks.add(tblock);
 				}
 			}
@@ -142,7 +129,7 @@ public class IceCrash extends WaterAbility implements AddonAbility{
 			for(int z = -1; z < 2; z += 2) {
 				blocklocation = location.clone().add(x, 0, z).getBlock();
 				if(blocklocation.getType() == Material.AIR || blocklocation.getType() == Material.ICE) {
-					TempBlock tblock = new TempBlock(blocklocation, Material.ICE, (byte) 0);
+					TempBlock tblock = new TempBlock(blocklocation, Material.ICE);
 					tempblocks.add(tblock);
 				}
 			}
@@ -154,8 +141,8 @@ public class IceCrash extends WaterAbility implements AddonAbility{
 		// TODO Auto-generated method stub
 		
 		if(!bPlayer.canBend(this) || player.isDead() || !player.isOnline()) {
+			new WaterReturn(player, player.getLocation().getBlock());
 			bPlayer.addCooldown(this);
-			player.sendMessage("you cant bend this");
 			remove();
 			return;
 		}
@@ -168,10 +155,11 @@ public class IceCrash extends WaterAbility implements AddonAbility{
 		}
 		
 		setBlocks();
-		location.add(direction).multiply(speed);
+		location.add(direction.multiply(speed));
 		for(Entity e : GeneralMethods.getEntitiesAroundPoint(location, radius)) {
-			if(e != null) {
-				player.sendMessage("damage");
+			if(e != null && e != player) {
+				new WaterReturn(player, player.getLocation().add(0, 1, 0).getBlock());
+				new IceCrashShards(player, location.getBlock());
 				DamageHandler.damageEntity(e, damage, this);
 				bPlayer.addCooldown(this);
 				remove();
@@ -184,7 +172,8 @@ public class IceCrash extends WaterAbility implements AddonAbility{
 		
 		if (!block.getType().equals(Material.AIR)) {
 			if (!block.getType().equals(Material.ICE)) {
-				player.sendMessage("" + block.getType() + " " + block.getLocation());
+				new IceCrashShards(player, location.getBlock());
+				new WaterReturn(player, player.getLocation().add(0, 1, 0).getBlock());
 				bPlayer.addCooldown(this);
 				remove();
 				return;
@@ -201,7 +190,11 @@ public class IceCrash extends WaterAbility implements AddonAbility{
 	@Override
 	public String getVersion() {
 		// TODO Auto-generated method stub
-		return "1.0";
+		return "2.1";
+	}
+	
+	public String getConfigPath() {
+		return "ExtraAbilities.ddicco.Water.IceCrash.";
 	}
 
 	@Override
@@ -209,6 +202,18 @@ public class IceCrash extends WaterAbility implements AddonAbility{
 		// TODO Auto-generated method stub
 		ProjectKorra.plugin.getServer().getPluginManager().registerEvents(new IceCrashListener(), ProjectKorra.plugin);
 		ProjectKorra.log.info("Successfully enabled " + getName() + " by " + getAuthor() + " version " + getVersion());
+		
+		ConfigManager.getConfig().addDefault(getConfigPath() + "Passive.Cooldown", 10000);
+		ConfigManager.getConfig().addDefault(getConfigPath() + "Passive.Duration", 15000);
+		ConfigManager.getConfig().addDefault(getConfigPath() + "Smash.Cooldown", 10000);
+		ConfigManager.getConfig().addDefault(getConfigPath() + "Smash.Damage", 4);
+		ConfigManager.getConfig().addDefault(getConfigPath() + "Smash.Speed", 0.8);
+		ConfigManager.getConfig().addDefault(getConfigPath() + "Smash.Radius", 3);
+		ConfigManager.getConfig().addDefault(getConfigPath() + "Shards.Amount", 10);
+		ConfigManager.getConfig().addDefault(getConfigPath() + "Shards.Damage", 1);
+		ConfigManager.getConfig().addDefault(getConfigPath() + "Shards.Radius", 2);
+		
+		ConfigManager.defaultConfig.save();
 	}
 
 	@Override
@@ -220,6 +225,16 @@ public class IceCrash extends WaterAbility implements AddonAbility{
 	public void leftClickFunction() {
 		// TODO Auto-generated method stub
 		direction = player.getLocation().getDirection();
+	}
+	
+	@Override
+	public String getDescription() {
+		return "Good waterbenders use their powers to turn the water into ice to form a structure, they can then shoot the structure that explodes into shards on impact";
+	}
+	
+	@Override
+	public String getInstructions() {
+		return "Press shift looking at a waterbendable block to create an ice structure and click to shoot it, you can then click to redirect it wherever you're looking at";
 	}
 
 }
