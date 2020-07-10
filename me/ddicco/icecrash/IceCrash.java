@@ -14,47 +14,239 @@ import com.projectkorra.projectkorra.ProjectKorra;
 import com.projectkorra.projectkorra.ability.AddonAbility;
 import com.projectkorra.projectkorra.ability.WaterAbility;
 import com.projectkorra.projectkorra.configuration.ConfigManager;
+import com.projectkorra.projectkorra.util.BlockSource;
+import com.projectkorra.projectkorra.util.ClickType;
 import com.projectkorra.projectkorra.util.DamageHandler;
+import com.projectkorra.projectkorra.util.ParticleEffect;
 import com.projectkorra.projectkorra.util.TempBlock;
 import com.projectkorra.projectkorra.waterbending.util.WaterReturn;
 
 public class IceCrash extends WaterAbility implements AddonAbility{
 	
+	public enum State {
+		START, SOURCING, PREPARE, MOVING, SHARDS, ENDED
+	}
+	
+	private double selectrange = 16;
 	private double damage;
 	private long cooldown;
+	private boolean sourced;
 	private Vector direction;
 	private Location location;
-	private ArrayList<TempBlock> previoustempblocks = new ArrayList<TempBlock>();
 	private ArrayList<TempBlock> tempblocks = new ArrayList<TempBlock>();
 	private Block blocklocation;
 	private double speed;
 	private double radius;
+	private State state;
+	private Block block;
+	private Block sourceblock;
+	private Location sourcelocation;
+	private int selectparticles;
+	private int sourcerange;
+	private long duration;
+	private long starttime;
+	private int loopcounter;
+	private boolean setup;
+	private Block newblocklocation;
 
-	public IceCrash(Player player, Location loc, ArrayList<TempBlock> tempBlocks) {
+	public IceCrash(Player player, State s) {
 		super(player);
 		// TODO Auto-generated constructor stub
-		location = loc;
+		state = s;
 		setFields();
 		
-		previoustempblocks = tempBlocks;
-		
-		for(TempBlock tb : previoustempblocks) {
-	        tb.revertBlock();
-	    }
-		previoustempblocks.clear();
+		if(state == State.PREPARE) {
+			if(WaterReturn.hasWaterBottle(player)) {
+				WaterReturn.emptyWaterBottle(player);
+				state = State.PREPARE;
+				sourced = false;
+				start();
+			}
+		}
+		if(state == State.SOURCING) {
+			if(sourceblock != null) {
+				state = State.SOURCING;
+				sourced = true;
+			}
+		}
 		
 		start();
 	}
-
+	
 	private void setFields() {
 		// TODO Auto-generated method stub
 		speed = ConfigManager.getConfig().getDouble(getConfigPath() + "Smash.Speed");
 		damage = ConfigManager.getConfig().getDouble(getConfigPath() + "Smash.Damage");
 		cooldown = ConfigManager.getConfig().getLong(getConfigPath() + "Smash.Cooldown");
+		location = player.getLocation();
 		location.add(0, 2, 0);
 		direction = player.getEyeLocation().getDirection();
 		radius = ConfigManager.getConfig().getDouble(getConfigPath() + "Smash.Radius");
 		
+		sourcerange = 16;
+		sourceblock = BlockSource.getWaterSourceBlock(player, sourcerange, ClickType.SHIFT_DOWN, true, true, true);
+		if(sourceblock != null) {
+			sourcelocation = sourceblock.getLocation();
+		}
+		block = player.getLocation().add(0, 2, 0).getBlock();
+		location = player.getLocation();
+		
+		cooldown = ConfigManager.getConfig().getLong(getConfigPath() + "Passive.Cooldown");
+		duration = ConfigManager.getConfig().getLong(getConfigPath() + "Passive.Duration");
+		starttime = System.currentTimeMillis();
+	}
+	
+	@Override
+	public void progress() {
+		// TODO Auto-generated method stub
+		
+		if(player.isDead() || !player.isOnline()) {
+			bPlayer.addCooldown(this);
+			remove();
+			return;
+		}
+		
+		if(!bPlayer.canBend(this)) {
+			if(state != State.SHARDS) {
+				new WaterReturn(player, player.getLocation().getBlock());
+				remove();
+				return;
+			}
+		}
+		
+		if(state == State.SOURCING) {
+			sourceAnimation();
+		}
+		
+		if(state == State.PREPARE) {
+			if(sourced == false) {
+				createPrepareBlocks();
+			} else {
+				block = sourceblock.getLocation().add(0, 2, 0).getBlock();
+				location = block.getLocation().add(0, -2, 0);
+				createPrepareBlocks();
+			}
+		}
+	}
+	
+	private void createPrepareBlocks() {
+		// TODO Auto-generated method stub
+		if(loopcounter == 0) {
+			testPrepareStartBlocks();
+			if(block.getType() != Material.AIR && block.getType() != Material.SNOW 
+					&& block.getLocation().add(0, 1, 0).getBlock().getType() != Material.AIR
+					&& block.getLocation().add(0, 1, 0).getBlock().getType() != Material.AIR) {
+				remove();
+				return;
+			} else {
+				TempBlock watertblock = new TempBlock(block, Material.WATER);
+				tempblocks.add(watertblock);
+			}
+		}
+		
+		if(loopcounter == 1) {
+			TempBlock watertblock2 = new TempBlock(block.getLocation().add(0, 1, 0).getBlock(), Material.WATER);
+			tempblocks.add(watertblock2);
+		}
+		
+		if(loopcounter == 2) {
+			if(setup == false) {
+				for(int y = 4; y < 6; y += 1) {
+					newblocklocation = location.clone().add(0, y, 0).getBlock();
+					TempBlock tblock = new TempBlock(newblocklocation, Material.ICE);
+					tempblocks.add(tblock);
+				}
+				
+				for(int x = -1; x < 2; x += 2) {
+					for(int y = 3; y < 6; y += 1) {
+						newblocklocation = location.clone().add(x, y, 0).getBlock();
+						TempBlock tblock = new TempBlock(newblocklocation, Material.ICE);
+						tempblocks.add(tblock);
+					}
+				}
+				
+				for(int z = -1; z < 2; z += 2) {
+					for(int y = 3; y < 6; y += 1) {
+						newblocklocation = location.clone().add(0, y, z).getBlock();
+						TempBlock tblock = new TempBlock(newblocklocation, Material.ICE);
+						tempblocks.add(tblock);
+					}
+				}
+				
+				for(int x = -1; x < 2; x += 2) {
+					for(int z = -1; z < 2; z += 2) {
+						newblocklocation = location.clone().add(x, 4, z).getBlock();
+						TempBlock tblock = new TempBlock(newblocklocation, Material.ICE);
+						tempblocks.add(tblock);
+					}
+				}
+				
+				setup = true;
+			}
+		}
+		
+		if(starttime + duration < System.currentTimeMillis()) {
+			bPlayer.addCooldown(this);
+			new WaterReturn(player, player.getLocation().getBlock());
+			remove();
+			return;
+		}
+		loopcounter += 1;
+	}
+	private void testPrepareStartBlocks() {
+		// TODO Auto-generated method stub
+		for(int y = 4; y < 6; y += 1) {
+			newblocklocation = location.clone().add(0, y, 0).getBlock();
+			if(newblocklocation.getType() != Material.AIR && newblocklocation.getType() != Material.SNOW) {
+				remove();
+				return;
+			}
+		}
+		
+		for(int x = -1; x < 2; x += 2) {
+			for(int y = 3; y < 6; y += 1) {
+				newblocklocation = location.clone().add(x, y, 0).getBlock();
+				if(newblocklocation.getType() != Material.AIR && newblocklocation.getType() != Material.SNOW) {
+					remove();
+					return;
+				}
+			}
+		}
+		
+		for(int z = -1; z < 2; z += 2) {
+			for(int y = 3; y < 6; y += 1) {
+				newblocklocation = location.clone().add(0, y, z).getBlock();
+				if(newblocklocation.getType() != Material.AIR && newblocklocation.getType() != Material.SNOW) {
+					remove();
+					return;
+				}
+			}
+		}
+		
+		for(int x = -1; x < 2; x += 2) {
+			for(int z = -1; z < 2; z += 2) {
+				newblocklocation = location.clone().add(x, 4, z).getBlock();
+				if(newblocklocation.getType() != Material.AIR && newblocklocation.getType() != Material.SNOW) {
+					remove();
+					return;
+				}
+			}
+		}
+	}
+	public State getState() {
+		return state;
+	}
+	
+	public void changeState(State s) {
+		state = s;
+	}
+	public void sourceShiftFunction() {
+		// TODO Auto-generated method stub
+		
+		state = State.PREPARE;
+	}
+	public void sourceAnimation() {
+		ParticleEffect.SMOKE.display(sourcelocation, selectparticles, 0F, 0F, 0F);
 	}
 	
 	@Override
@@ -83,7 +275,6 @@ public class IceCrash extends WaterAbility implements AddonAbility{
 		// TODO Auto-generated method stub
 		return "IceCrash";
 	}
-
 	@Override
 	public boolean isHarmlessAbility() {
 		// TODO Auto-generated method stub
@@ -96,107 +287,39 @@ public class IceCrash extends WaterAbility implements AddonAbility{
 		return true;
 	}
 	
-	private void setBlocks() {
-		for(int y = 0; y < 2; y += 1) {
-			blocklocation = location.clone().add(0, y, 0).getBlock();
-			if(blocklocation.getType() == Material.AIR || blocklocation.getType() == Material.ICE) {
-				TempBlock tblock = new TempBlock(blocklocation, Material.ICE);
-				tempblocks.add(tblock);
-			}
-		}
+	private void moveIceSetBlocks() {
 		
-		for(int x = -1; x < 2; x += 2) {
-			for(int y = -1; y < 2; y += 1) {
-				blocklocation = location.clone().add(x, y, 0).getBlock();
-				if(blocklocation.getType() == Material.AIR || blocklocation.getType() == Material.ICE) {
-					TempBlock tblock = new TempBlock(blocklocation, Material.ICE);
-					tempblocks.add(tblock);
-				}
-			}
-		}
-		
-		for(int z = -1; z < 2; z += 2) {
-			for(int y = -1; y < 2; y += 1) {
-				blocklocation = location.clone().add(0, y, z).getBlock();
-				if(blocklocation.getType() == Material.AIR || blocklocation.getType() == Material.ICE) {
-					TempBlock tblock = new TempBlock(blocklocation, Material.ICE);
-					tempblocks.add(tblock);
-				}
-			}
-		}
-		
-		for(int x = -1; x < 2; x += 2) {
-			for(int z = -1; z < 2; z += 2) {
-				blocklocation = location.clone().add(x, 0, z).getBlock();
-				if(blocklocation.getType() == Material.AIR || blocklocation.getType() == Material.ICE) {
-					TempBlock tblock = new TempBlock(blocklocation, Material.ICE);
-					tempblocks.add(tblock);
-				}
-			}
-		}
 	}
 	
-	@Override
-	public void progress() {
-		// TODO Auto-generated method stub
+	public void moveIce() {
 		
-		if(!bPlayer.canBend(this) || player.isDead() || !player.isOnline()) {
-			new WaterReturn(player, player.getLocation().getBlock());
-			bPlayer.addCooldown(this);
-			remove();
-			return;
-		}
-		
-		if(!tempblocks.isEmpty()) {
-			for(TempBlock tb : tempblocks) {
-		        tb.revertBlock();
-		    }
-			tempblocks.clear();
-		}
-		
-		setBlocks();
-		location.add(direction.multiply(speed));
-		for(Entity e : GeneralMethods.getEntitiesAroundPoint(location, radius)) {
-			if(e != null && e != player) {
-				new WaterReturn(player, player.getLocation().add(0, 1, 0).getBlock());
-				new IceCrashShards(player, location.getBlock());
-				DamageHandler.damageEntity(e, damage, this);
-				bPlayer.addCooldown(this);
-				remove();
-				return;
-			}
-		}
-		
-		Location testblocklocation = location;
-		final Block block = testblocklocation.getBlock();
-		
-		if (!block.getType().equals(Material.AIR)) {
-			if (!block.getType().equals(Material.ICE)) {
-				new IceCrashShards(player, location.getBlock());
-				new WaterReturn(player, player.getLocation().add(0, 1, 0).getBlock());
-				bPlayer.addCooldown(this);
-				remove();
-				return;
-			}
-		}
 	}
+	
 
 	@Override
 	public String getAuthor() {
 		// TODO Auto-generated method stub
 		return "ddicco";
 	}
-
 	@Override
 	public String getVersion() {
 		// TODO Auto-generated method stub
 		return "2.1";
 	}
 	
+	@Override
+	public String getDescription() {
+		return "Good waterbenders use their powers to turn the water into ice to form a structure, they can then shoot the structure that explodes into shards on impact";
+	}
+	
+	@Override
+	public String getInstructions() {
+		return "Press shift looking at a waterbendable block to create an ice structure and click to shoot it, you can then click to redirect it wherever you're looking at";
+	}
+	
 	public String getConfigPath() {
 		return "ExtraAbilities.ddicco.Water.IceCrash.";
 	}
-
 	@Override
 	public void load() {
 		// TODO Auto-generated method stub
@@ -215,26 +338,16 @@ public class IceCrash extends WaterAbility implements AddonAbility{
 		
 		ConfigManager.defaultConfig.save();
 	}
-
 	@Override
 	public void stop() {
 		// TODO Auto-generated method stub
 		
 	}
-
-	public void leftClickFunction() {
+	public void resetDirectionFunction() {
 		// TODO Auto-generated method stub
-		direction = player.getLocation().getDirection();
 	}
-	
-	@Override
-	public String getDescription() {
-		return "Good waterbenders use their powers to turn the water into ice to form a structure, they can then shoot the structure that explodes into shards on impact";
+	public void createMoveAnimation() {
+		// TODO Auto-generated method stub
+		
 	}
-	
-	@Override
-	public String getInstructions() {
-		return "Press shift looking at a waterbendable block to create an ice structure and click to shoot it, you can then click to redirect it wherever you're looking at";
-	}
-
 }
